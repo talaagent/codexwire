@@ -53,7 +53,7 @@ fn the_recorded_turn_decodes() {
                 }
                 Some(2) => {
                     let r: ThreadStartResponse = decode(&what, result);
-                    assert!(r.thread.turns.is_empty());
+                    assert_eq!(r.thread.turns.len(), 0);
                 }
                 Some(3) => {
                     let _: TurnStartResponse = decode(&what, result);
@@ -73,7 +73,7 @@ fn the_recorded_turn_decodes() {
                         known_item(&what, &n.item);
                     })
                     || try_as::<ErrorNotification>(&method, &params, |n| {
-                        assert!(!n.error.message.is_empty());
+                        assert_ne!(n.error.message, "");
                     });
                 if known {
                     decoded += 1;
