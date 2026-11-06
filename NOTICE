@@ -1,0 +1,12 @@
+codexwire
+Copyright 2026 Ian Macalinao
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+schema/codex_app_server_protocol.schemas.json is the app-server protocol
+schema of OpenAI Codex (https://github.com/openai/codex), dumped with
+`codex app-server generate-json-schema` from the version in schema/VERSION;
+the types in src/protocol.rs, and their doc comments, are generated from it
+(scripts/gen-codex-protocol). OpenAI Codex is Copyright 2025 OpenAI and
+licensed under the Apache License, Version 2.0
+(https://github.com/openai/codex/blob/main/LICENSE).

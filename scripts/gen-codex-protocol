@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Regenerate the protocol types (src/protocol.rs) from the committed
+# app-server schema. Offline: the input is
+# schema/{codex_app_server_protocol.schemas.json,VERSION}.
+#
+# `--refresh [CODEX]` first re-dumps the schema from a codex binary (default
+# `codex` on PATH) and records its version: do that when bumping the pinned
+# Codex, then review the diff of src/protocol.rs.
+#
+# `--check [CODEX]` only checks that a codex binary is the pinned version
+# (schema/VERSION) and exits non-zero if not.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+pinned=$(<schema/VERSION)
+codex_version() { "$1" --version | awk '{print $NF}'; }
+case ${1:-} in
+  --check)
+    have=$(codex_version "${2:-codex}")
+    if [[ $have != "$pinned" ]]; then
+      echo "gen-codex-protocol: ${2:-codex} is $have, the schema is pinned to $pinned (schema/VERSION): --refresh to bump" >&2
+      exit 1
+    fi
+    echo "gen-codex-protocol: codex $have matches the pin"
+    exit 0
+    ;;
+  --refresh)
+    codex=${2:-codex}
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    "$codex" app-server generate-json-schema --out "$tmp" >/dev/null
+    cp "$tmp/codex_app_server_protocol.schemas.json" schema/
+    new=$(codex_version "$codex")
+    [[ $new == "$pinned" ]] || echo "gen-codex-protocol: pin moves $pinned -> $new" >&2
+    echo "$new" >schema/VERSION
+    ;;
+  "") ;;
+  *)
+    echo "usage: $0 [--refresh [CODEX] | --check [CODEX]]" >&2
+    exit 2
+    ;;
+esac
+python3 -I scripts/gen-codex-protocol.py schema/codex_app_server_protocol.schemas.json \
+  schema/VERSION src/protocol.rs
+rustfmt --edition 2024 src/protocol.rs

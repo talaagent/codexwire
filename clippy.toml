@@ -1,0 +1,10 @@
+# Clippy config for CI, like ccwire's. Cargo.toml's [lints] deny unwrap_used
+# and disallowed_methods; this allows unwrap in tests and lists the methods.
+allow-unwrap-in-tests = true
+disallowed-methods = [
+    { path = "tokio::runtime::Runtime::block_on", reason = "await it; block_on only in tests and main" },
+    { path = "tokio::runtime::Handle::block_on", reason = "await it; block_on only in tests and main" },
+    { path = "std::thread::spawn", reason = "tokio::spawn (or spawn_blocking with a `// spawn_blocking:` reason)" },
+    { path = "std::thread::sleep", reason = "tokio::time::sleep" },
+    { path = "futures::executor::block_on", reason = "await it: one tokio runtime per binary" },
+]

@@ -2,12 +2,73 @@
 
 A Rust client for [OpenAI Codex](https://github.com/openai/codex)'s
 app-server: it runs `codex app-server` and speaks its JSON-RPC over the
-child's stdio, with serde types generated from the app-server's JSON Schema
-and pinned to one Codex version. The Codex counterpart to
+child's stdio, the way Codex's IDE extensions do. The Codex counterpart to
 [ccwire](https://github.com/talaagent/ccwire).
 
-Status: scaffold. The crate lands in the first PR.
+Status: early. Checked against Codex 0.158.0 (`codexwire::CODEX_VERSION`).
+
+- `codexwire::protocol`: serde types for the requests, responses,
+  notifications and server requests codexwire uses, generated from the
+  app-server's JSON Schema (`codex app-server generate-json-schema`) of the
+  pinned Codex. `Request` ties a params type to its method and response.
+- `codexwire::rpc`: the JSON-RPC framing (one message a line).
+- `codexwire::client`: `spawn_app_server` runs the child with an allowlisted
+  environment; `Client` writes requests and matches responses by id, and
+  hands the server's notifications and requests over a channel, in order.
+  `redact` scrubs secrets out of its stderr.
+- `codexwire::auth`: a session's private copy of `auth.json`, copied back
+  only if Codex refreshed it and the real one didn't change meanwhile.
+
+From `examples/initialize.rs`:
+
+```rust,no_run
+use codexwire::client::{ServerMessage, spawn_app_server};
+use codexwire::protocol::{ClientInfo, InitializeParams};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn core::error::Error>> {
+    let mut server = spawn_app_server("codex", &[], &[], std::path::Path::new("."))?;
+    let init = server
+        .client
+        .request(&InitializeParams {
+            capabilities: None,
+            client_info: ClientInfo {
+                name: "example".into(),
+                title: None,
+                version: "0.1.0".into(),
+            },
+        })
+        .await?;
+    println!("codex: {}", init.user_agent);
+    server.client.notify("initialized", None).await?;
+    // thread/start, turn/start (protocol::{ThreadStartParams, TurnStartParams}),
+    // then read what the server sends:
+    while let Some(msg) = server.messages.recv().await {
+        if let ServerMessage::Notification { method, .. } = msg {
+            println!("{method}");
+        }
+    }
+    Ok(())
+}
+```
+
+## The schema and its pin
+
+`schema/` holds the app-server schema and the Codex version it came from
+(`schema/VERSION`); `src/protocol.rs` is generated from it and committed.
+
+- `scripts/gen-codex-protocol`: regenerate `src/protocol.rs` (offline).
+- `scripts/gen-codex-protocol --refresh [CODEX]`: re-dump the schema from a
+  `codex` binary and move the pin to its version, then regenerate.
+- `scripts/gen-codex-protocol --check [CODEX]`: fail unless the binary is
+  the pinned version.
+- `scripts/check-codegen`: fail if `src/protocol.rs` isn't what the schema
+  makes.
+
+A client can compare the server's version (`user_agent_version` of the
+`initialize` response's `userAgent`) to `CODEX_VERSION`.
 
 ## License
 
-Apache-2.0 (see LICENSE).
+Apache-2.0 (see LICENSE). The schema is OpenAI Codex's, Apache-2.0 (see
+NOTICE).
