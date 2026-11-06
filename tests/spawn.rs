@@ -1,0 +1,103 @@
+//! `spawn_app_server` against a fake `codex` (`tests/fake_codex`, python3):
+//! the args, the cwd, the allowlisted environment, both readers past a
+//! line that isn't UTF-8, and the kill on drop.
+
+// `#[tokio::test]` expands to `block_on`.
+#![allow(clippy::disallowed_methods)]
+
+use core::time::Duration;
+
+use codexwire::client::{ENV_ALLOW, ServerMessage, spawn_app_server};
+use codexwire::protocol::{CODEX_VERSION, ClientInfo, InitializeParams};
+use serde_json::{Value, json};
+
+const FAKE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fake_codex");
+
+async fn within<F: Future>(f: F) -> F::Output {
+    tokio::time::timeout(Duration::from_secs(10), f)
+        .await
+        .expect("hung")
+}
+
+#[tokio::test]
+async fn spawns_the_app_server() {
+    let cwd = tempfile::tempdir().unwrap();
+    let env = [("CODEX_HOME".to_owned(), "/s/codex".to_owned())];
+    let mut server = spawn_app_server(FAKE, &["--flag".to_owned()], &env, cwd.path()).unwrap();
+
+    // Its first line isn't UTF-8: reported, and the connection goes on.
+    assert!(matches!(
+        within(server.messages.recv()).await,
+        Some(ServerMessage::Malformed(e)) if e.contains("UTF-8")
+    ));
+    let init = within(server.client.request(&InitializeParams {
+        capabilities: None,
+        client_info: ClientInfo {
+            name: "test".into(),
+            title: None,
+            version: "0.1.0".into(),
+        },
+    }))
+    .await
+    .unwrap();
+    assert_eq!(
+        codexwire::user_agent_version(&init.user_agent),
+        Some(CODEX_VERSION)
+    );
+    assert_eq!(init.codex_home, "/s/codex");
+
+    let info = within(server.client.call("fake/info", &json!({})))
+        .await
+        .unwrap();
+    assert_eq!(info["args"], json!(["--flag"]));
+    assert_eq!(
+        std::path::Path::new(info["cwd"].as_str().unwrap()),
+        cwd.path().canonicalize().unwrap()
+    );
+    let Value::Object(child_env) = &info["env"] else {
+        panic!("env: {info}")
+    };
+    for k in child_env.keys() {
+        assert!(
+            ENV_ALLOW.contains(&k.as_str()) || k == "CODEX_HOME",
+            "{k} reached the child"
+        );
+    }
+    assert_eq!(child_env["CODEX_HOME"], "/s/codex");
+
+    // Its stderr: the line that isn't UTF-8 kept lossily, and the next.
+    within(async {
+        while !server.stderr.text().contains("fake stderr ok") {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(
+        server
+            .stderr
+            .text()
+            .starts_with("\u{fffd}\u{fffd} not utf-8\n")
+    );
+
+    // Dropped: killed.
+    let pid = info["pid"].as_u64().unwrap();
+    drop(server);
+    within(async {
+        while alive(pid) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+}
+
+/// Whether `pid` runs (a zombie, killed and not yet reaped, doesn't).
+fn alive(pid: u64) -> bool {
+    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+        // `pid (comm) state ...`
+        Ok(stat) => stat
+            .rsplit_once(") ")
+            .is_some_and(|(_, rest)| !rest.starts_with('Z')),
+        // No /proc (not Linux): a zombie can't be told apart; assume gone.
+        Err(_) => false,
+    }
+}
