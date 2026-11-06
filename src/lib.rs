@@ -6,7 +6,10 @@
 //! its `VERSION` are in `schema/`, [`CODEX_VERSION`] is the version), [`rpc`]
 //! frames its messages, [`client`] runs the child and matches responses to
 //! requests, and [`auth`] gives a session its own copy of `auth.json`.
-
+//!
+//! The README follows (its example is compiled as a doctest).
+//!
+#![doc = include_str!("../README.md")]
 // Owned arguments where the callee keeps them, and Result-returning helpers
 // kept uniform; the error docs would only restate the messages.
 #![allow(

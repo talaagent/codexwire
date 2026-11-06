@@ -6,6 +6,7 @@ child's stdio, the way Codex's IDE extensions do. The Codex counterpart to
 [ccwire](https://github.com/talaagent/ccwire).
 
 Status: early. Checked against Codex 0.158.0 (`codexwire::CODEX_VERSION`).
+Unix only (the child's process handling, `auth.json`'s file modes).
 
 - `codexwire::protocol`: serde types for the requests, responses,
   notifications and server requests codexwire uses, generated from the
@@ -15,6 +16,10 @@ Status: early. Checked against Codex 0.158.0 (`codexwire::CODEX_VERSION`).
 - `codexwire::client`: `spawn_app_server` runs the child with an allowlisted
   environment; `Client` writes requests and matches responses by id, and
   hands the server's notifications and requests over a channel, in order.
+  A line that isn't JSON-RPC (or UTF-8) comes out as `Malformed` and the
+  connection goes on; once the server's output ends, every call fails
+  `Closed`. Calls have no timeout of their own: wrap them in
+  `tokio::time::timeout` (a dropped call forgets its request).
   `redact` scrubs secrets out of its stderr.
 - `codexwire::auth`: a session's private copy of `auth.json`, copied back
   only if Codex refreshed it and the real one didn't change meanwhile.
@@ -61,9 +66,10 @@ async fn main() -> Result<(), Box<dyn core::error::Error>> {
 - `scripts/gen-codex-protocol --refresh [CODEX]`: re-dump the schema from a
   `codex` binary and move the pin to its version, then regenerate.
 - `scripts/gen-codex-protocol --check [CODEX]`: fail unless the binary is
-  the pinned version.
+  the pinned version. This checks the binary's version only, not the
+  generated code: that is `check-codegen`.
 - `scripts/check-codegen`: fail if `src/protocol.rs` isn't what the schema
-  makes.
+  makes (CI runs it).
 
 A client can compare the server's version (`user_agent_version` of the
 `initialize` response's `userAgent`) to `CODEX_VERSION`.
