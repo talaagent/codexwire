@@ -8,3 +8,5 @@ disallowed-methods = [
     { path = "std::thread::sleep", reason = "tokio::time::sleep" },
     { path = "futures::executor::block_on", reason = "await it: one tokio runtime per binary" },
 ]
+# The README is the crate doc; "OpenAI" in its prose is a name, not code.
+doc-valid-idents = ["OpenAI", ".."]

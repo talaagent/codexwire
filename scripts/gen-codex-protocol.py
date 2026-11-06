@@ -356,12 +356,23 @@ class Gen:
         return "\n".join(out) + "\n"
 
 
+def md_safe(ln):
+    """Keep the schema's prose from being read as rustdoc markup: outside
+    code spans and [`path`] links, brackets are escaped (rustdoc would try
+    to resolve them as links) and a bare URL becomes an autolink."""
+    parts = re.split(r"(\[`[^`]*`\]|`[^`]*`|<https?://[^>]*>)", ln)
+    for i in range(0, len(parts), 2):
+        t = re.sub(r"([\[\]])", r"\\\1", parts[i])
+        parts[i] = re.sub(r"https?://[^\s<>]*[^\s<>).,;:]", lambda m: f"<{m[0]}>", t)
+    return "".join(parts)
+
+
 def doc_lines(d, indent=""):
     if not d:
         return ""
     lines = d.strip().replace("\r", "").split("\n")
     return "".join(
-        f"{indent}///{(' ' + ln.rstrip()) if ln.strip() else ''}\n" for ln in lines
+        f"{indent}///{(' ' + md_safe(ln.rstrip())) if ln.strip() else ''}\n" for ln in lines
     )
 
 

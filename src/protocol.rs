@@ -88,7 +88,7 @@ impl ServerRequest for McpServerElicitationRequestParams {
 
 /// A path that is guaranteed to be absolute and normalized (though it is not guaranteed to be canonicalized or exist on the filesystem).
 ///
-/// IMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using [AbsolutePathBufGuard::new]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.
+/// IMPORTANT: When deserializing an `AbsolutePathBuf`, a base path must be set using \[AbsolutePathBufGuard::new\]. If no base path is set, the deserialization will fail unless the path being deserialized is already absolute.
 pub type AbsolutePathBuf = String;
 
 /// Sparse rolling rate-limit update.
@@ -630,7 +630,7 @@ pub enum FileChangeApprovalDecision {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct FileChangeRequestApprovalParams {
-    /// [UNSTABLE] When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).
+    /// \[UNSTABLE\] When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).
     #[serde(rename = "grantRoot")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grant_root: Option<String>,
@@ -1209,7 +1209,7 @@ pub struct RateLimitWindow {
 /// A non-empty reasoning effort value advertised by the model.
 pub type ReasoningEffort = String;
 
-/// A summary of the reasoning performed by the model. This can be useful for debugging and understanding the model's reasoning process. See https://platform.openai.com/docs/guides/reasoning?api-mode=responses#reasoning-summaries
+/// A summary of the reasoning performed by the model. This can be useful for debugging and understanding the model's reasoning process. See <https://platform.openai.com/docs/guides/reasoning?api-mode=responses#reasoning-summaries>
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ReasoningSummary {
     #[serde(rename = "auto")]
@@ -1418,7 +1418,7 @@ pub struct Thread {
     #[serde(rename = "parentThreadId")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_thread_id: Option<String>,
-    /// [UNSTABLE] Path to the thread on disk.
+    /// \[UNSTABLE\] Path to the thread on disk.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// Usually the first user message in the thread, if available.
@@ -1859,7 +1859,7 @@ pub struct TurnStartParams {
     /// Override the working directory for this turn and subsequent turns.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
-    /// Replace this thread's disabled plugin IDs. Omitted/null preserves the list; [] clears it.
+    /// Replace this thread's disabled plugin IDs. Omitted/null preserves the list; \[\] clears it.
     #[serde(rename = "disabledPluginIds")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disabled_plugin_ids: Option<Vec<String>>,
