@@ -191,7 +191,9 @@ pub struct StderrTail(Arc<std::sync::Mutex<VecDeque<String>>>);
 impl StderrTail {
     const KEEP: usize = 20;
 
-    pub(crate) fn push(&self, line: String) {
+    /// Keep `line`, dropping the oldest past the last 20 (for a child this
+    /// crate didn't spawn; `spawn_app_server` fills its own).
+    pub fn push(&self, line: String) {
         let mut q = lock(&self.0);
         if q.len() == Self::KEEP {
             q.pop_front();
@@ -199,6 +201,7 @@ impl StderrTail {
         q.push_back(line);
     }
 
+    /// The kept lines, oldest first, one a line.
     pub fn text(&self) -> String {
         lock(&self.0)
             .iter()
