@@ -39,6 +39,7 @@ tokio = { version = "1", default-features = false, features = [
     "rt",
     "sync",
     "macros",
+    "time",
 ] }
 
 [lints.clippy]

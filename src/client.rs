@@ -26,6 +26,8 @@ pub enum ClientError {
     Closed,
     /// Writing failed.
     Io(String),
+    /// The params didn't serialise as JSON.
+    Encode(String),
     /// The answer didn't decode as the method's response type.
     Decode(String),
 }
@@ -36,6 +38,7 @@ impl core::fmt::Display for ClientError {
             Self::Rpc(e) => write!(f, "app-server error: {e}"),
             Self::Closed => f.write_str("app-server connection closed"),
             Self::Io(e) => write!(f, "app-server write: {e}"),
+            Self::Encode(e) => write!(f, "app-server request params: {e}"),
             Self::Decode(e) => write!(f, "app-server answer: {e}"),
         }
     }
@@ -56,11 +59,33 @@ pub enum ServerMessage {
         method: String,
         params: Value,
     },
-    /// A line that didn't parse (logged and skipped by most callers).
+    /// A line that didn't parse, or wasn't UTF-8: why (logged and skipped
+    /// by most callers). The connection goes on.
     Malformed(String),
 }
 
-type Pending = Arc<std::sync::Mutex<HashMap<i64, oneshot::Sender<Result<Value, RpcError>>>>>;
+/// The calls waiting for an answer, and whether the reader has stopped
+/// (then no call waits: it would wait forever).
+#[derive(Default)]
+struct PendingState {
+    closed: bool,
+    waiting: HashMap<i64, oneshot::Sender<Result<Value, RpcError>>>,
+}
+
+type Pending = Arc<std::sync::Mutex<PendingState>>;
+
+/// Removes a call's entry when its future is done or dropped (cancelled by
+/// a `select!` or a timeout), so abandoned calls don't pile up.
+struct Waiting<'a> {
+    pending: &'a Pending,
+    id: i64,
+}
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        lock(self.pending).waiting.remove(&self.id);
+    }
+}
 
 /// The request side; cheap to share (`Arc`).
 pub struct Client {
@@ -78,6 +103,18 @@ fn lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 impl Client {
     /// Start reading `reader` (a task) and writing to `writer`.
+    ///
+    /// The reader runs until `reader` ends (EOF or an I/O error); a line
+    /// that isn't JSON-RPC or isn't UTF-8 comes out as
+    /// [`ServerMessage::Malformed`] and the reading goes on.
+    ///
+    /// Neither the line length nor the [`Messages`] channel is bounded: a
+    /// caller that stops reading `Messages`, or a server that writes one
+    /// huge line, grows memory.
+    ///
+    /// # Panics
+    ///
+    /// Outside a tokio runtime (it spawns the reader with `tokio::spawn`).
     pub fn new<R, W>(reader: R, writer: W) -> (Arc<Self>, Messages)
     where
         R: AsyncRead + Send + Unpin + 'static,
@@ -85,32 +122,7 @@ impl Client {
     {
         let pending: Pending = Arc::default();
         let (tx, rx) = mpsc::unbounded_channel();
-        let p = Arc::clone(&pending);
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(reader).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                let msg = match rpc::parse_line(&line) {
-                    Ok(None) => continue,
-                    Ok(Some(m)) => m,
-                    Err(e) => {
-                        let _ = tx.send(ServerMessage::Malformed(e));
-                        continue;
-                    }
-                };
-                match msg {
-                    Incoming::Response { id, result } => answer(&p, &id, Ok(result)),
-                    Incoming::Error { id, error } => answer(&p, &id, Err(error)),
-                    Incoming::Request { id, method, params } => {
-                        let _ = tx.send(ServerMessage::Request { id, method, params });
-                    }
-                    Incoming::Notification { method, params } => {
-                        let _ = tx.send(ServerMessage::Notification { method, params });
-                    }
-                }
-            }
-            // Closed: fail whatever is still waiting (dropping the senders).
-            lock(&p).clear();
-        });
+        tokio::spawn(read_server(reader, Arc::clone(&pending), tx));
         let c = Self {
             writer: Mutex::new(Box::new(writer)),
             next_id: AtomicI64::new(1),
@@ -128,17 +140,27 @@ impl Client {
     }
 
     /// Send a raw request and await its result.
+    ///
+    /// [`ClientError::Closed`] at once once the server's output has ended.
+    /// There is no timeout of its own: wrap it (or [`Client::request`]) in
+    /// `tokio::time::timeout`. Dropping the future (a timeout, a `select!`)
+    /// forgets the request; a late answer to it is ignored.
     pub async fn call(&self, method: &str, params: &Value) -> Result<Value, ClientError> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
-        lock(&self.pending).insert(id, tx);
-        if let Err(e) = self
-            .write(&rpc::request(&Value::from(id), method, params))
-            .await
         {
-            lock(&self.pending).remove(&id);
-            return Err(e);
+            let mut p = lock(&self.pending);
+            if p.closed {
+                return Err(ClientError::Closed);
+            }
+            p.waiting.insert(id, tx);
         }
+        let _waiting = Waiting {
+            pending: &self.pending,
+            id,
+        };
+        self.write(&rpc::request(&Value::from(id), method, params))
+            .await?;
         match rx.await {
             Ok(Ok(v)) => Ok(v),
             Ok(Err(e)) => Err(ClientError::Rpc(e)),
@@ -149,7 +171,7 @@ impl Client {
     /// A typed request (its method and response from the generated
     /// protocol).
     pub async fn request<R: Request + Sync>(&self, params: &R) -> Result<R::Response, ClientError> {
-        let p = serde_json::to_value(params).map_err(|e| ClientError::Decode(e.to_string()))?;
+        let p = serde_json::to_value(params).map_err(|e| ClientError::Encode(e.to_string()))?;
         let v = self.call(R::METHOD, &p).await?;
         serde_json::from_value(v).map_err(|e| ClientError::Decode(format!("{}: {e}", R::METHOD)))
     }
@@ -177,9 +199,58 @@ impl Client {
     }
 }
 
+/// The reader task: route answers to their calls, hand the rest to `tx`.
+async fn read_server<R: AsyncRead + Unpin>(
+    reader: R,
+    p: Pending,
+    tx: mpsc::UnboundedSender<ServerMessage>,
+) {
+    let mut reader = BufReader::new(reader);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let line = match core::str::from_utf8(&buf) {
+            Ok(l) => l,
+            Err(e) => {
+                let _ = tx.send(ServerMessage::Malformed(format!(
+                    "JSON-RPC line is not UTF-8: {e}"
+                )));
+                continue;
+            }
+        };
+        let msg = match rpc::parse_line(line) {
+            Ok(None) => continue,
+            Ok(Some(m)) => m,
+            Err(e) => {
+                let _ = tx.send(ServerMessage::Malformed(e));
+                continue;
+            }
+        };
+        match msg {
+            Incoming::Response { id, result } => answer(&p, &id, Ok(result)),
+            Incoming::Error { id, error } => answer(&p, &id, Err(error)),
+            Incoming::Request { id, method, params } => {
+                let _ = tx.send(ServerMessage::Request { id, method, params });
+            }
+            Incoming::Notification { method, params } => {
+                let _ = tx.send(ServerMessage::Notification { method, params });
+            }
+        }
+    }
+    // Closed: fail whatever is still waiting (dropping the senders), and
+    // every later call.
+    let mut p = lock(&p);
+    p.closed = true;
+    p.waiting.clear();
+}
+
 fn answer(p: &Pending, id: &RequestId, r: Result<Value, RpcError>) {
     let Some(id) = id.as_i64() else { return };
-    if let Some(tx) = lock(p).remove(&id) {
+    if let Some(tx) = lock(p).waiting.remove(&id) {
         let _ = tx.send(r);
     }
 }
@@ -199,6 +270,23 @@ impl StderrTail {
             q.pop_front();
         }
         q.push_back(line);
+    }
+
+    /// Keep each line of `reader` until it ends (EOF or an I/O error).
+    /// Lines that aren't UTF-8 are kept lossily (`U+FFFD`), so the reading
+    /// never stops early and the child never writes into a closed pipe.
+    pub async fn read_from<R: AsyncRead + Unpin>(&self, reader: R) {
+        let mut reader = BufReader::new(reader);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let line = String::from_utf8_lossy(&buf);
+            self.push(line.trim_end_matches(['\n', '\r']).to_owned());
+        }
     }
 
     /// The kept lines, oldest first, one a line.
@@ -276,6 +364,9 @@ fn secret_pair(w: &str) -> Option<(&str, &str)> {
 /// The parent's environment variables a `codex app-server` gets (besides
 /// the backend's own, like `CODEX_HOME`): it starts from an empty one, so
 /// no secret of the parent's reaches the session.
+///
+/// No proxy variables (`HTTPS_PROXY`, `NO_PROXY`, ...): a proxy URL can
+/// carry credentials. A caller that needs them passes them in `env`.
 pub const ENV_ALLOW: &[&str] = &[
     "PATH",
     "HOME",
@@ -314,6 +405,13 @@ pub struct AppServer {
 
 /// Spawn `<command> app-server <args>` in `cwd` with only `env` and the
 /// parent's [`ENV_ALLOW`] variables (killed when dropped).
+///
+/// For a graceful stop, [`Client::shutdown`] (the server exits on EOF),
+/// then await `child.wait()` under a timeout before dropping it.
+///
+/// # Panics
+///
+/// Outside a tokio runtime, like [`Client::new`].
 pub fn spawn_app_server(
     command: &str,
     args: &[String],
@@ -338,12 +436,7 @@ pub fn spawn_app_server(
     };
     let tail = StderrTail::default();
     let t = tail.clone();
-    tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(l)) = lines.next_line().await {
-            t.push(l);
-        }
-    });
+    tokio::spawn(async move { t.read_from(stderr).await });
     let (client, messages) = Client::new(stdout, stdin);
     Ok(AppServer {
         client,
@@ -447,5 +540,96 @@ mod tests {
         drop(sr);
         assert_eq!(call.await.unwrap(), Err(ClientError::Closed));
         assert_eq!(msgs.recv().await, None);
+    }
+
+    /// What the server reads: our lines.
+    type ServerIn = tokio::io::Lines<BufReader<tokio::io::DuplexStream>>;
+
+    /// A client over two pipes: the server's output (`out`) and its input
+    /// (`inp`), so either can close alone.
+    fn piped() -> (Arc<Client>, Messages, tokio::io::DuplexStream, ServerIn) {
+        let (out_ours, out_theirs) = tokio::io::duplex(4096);
+        let (in_ours, in_theirs) = tokio::io::duplex(4096);
+        let (client, msgs) = Client::new(out_ours, in_ours);
+        (client, msgs, out_theirs, BufReader::new(in_theirs).lines())
+    }
+
+    async fn within<F: Future>(f: F) -> F::Output {
+        tokio::time::timeout(core::time::Duration::from_secs(5), f)
+            .await
+            .expect("hung")
+    }
+
+    #[tokio::test]
+    async fn a_call_after_the_server_output_ended_fails_at_once() {
+        let (client, mut msgs, out, _inp) = piped();
+        // The server's stdout closes; its stdin (ours to write) stays open.
+        drop(out);
+        assert_eq!(within(msgs.recv()).await, None);
+        assert_eq!(
+            within(client.call("thread/start", &json!({}))).await,
+            Err(ClientError::Closed)
+        );
+        assert!(lock(&client.pending).waiting.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_line_that_is_not_utf8_is_malformed_and_reading_goes_on() {
+        let (client, mut msgs, mut out, mut inp) = piped();
+        let c = Arc::clone(&client);
+        let call = tokio::spawn(async move { c.call("turn/start", &json!({})).await });
+        let v: Value = serde_json::from_str(&inp.next_line().await.unwrap().unwrap()).unwrap();
+        out.write_all(
+            b"\xff\xfe not utf-8\n{\"method\":\"turn/started\",\"params\":{}}\nnot json\n",
+        )
+        .await
+        .unwrap();
+        out.write_all(rpc::response(&v["id"], &json!(1)).as_bytes())
+            .await
+            .unwrap();
+        assert!(
+            matches!(within(msgs.recv()).await, Some(ServerMessage::Malformed(e)) if e.contains("UTF-8"))
+        );
+        assert!(
+            matches!(within(msgs.recv()).await, Some(ServerMessage::Notification { method, .. }) if method == "turn/started")
+        );
+        assert!(matches!(
+            within(msgs.recv()).await,
+            Some(ServerMessage::Malformed(_))
+        ));
+        assert_eq!(within(call).await.unwrap(), Ok(json!(1)));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_call_forgets_its_request() {
+        let (client, mut msgs, mut out, mut inp) = piped();
+        let r = tokio::time::timeout(
+            core::time::Duration::from_millis(50),
+            client.call("turn/start", &json!({})),
+        )
+        .await;
+        assert!(r.is_err(), "no answer: times out");
+        assert!(lock(&client.pending).waiting.is_empty());
+        // A late answer to it is ignored; the connection goes on.
+        let v: Value = serde_json::from_str(&inp.next_line().await.unwrap().unwrap()).unwrap();
+        out.write_all(rpc::response(&v["id"], &json!(1)).as_bytes())
+            .await
+            .unwrap();
+        out.write_all(b"{\"method\":\"x\"}\n").await.unwrap();
+        assert!(
+            matches!(within(msgs.recv()).await, Some(ServerMessage::Notification { method, .. }) if method == "x")
+        );
+    }
+
+    #[tokio::test]
+    async fn stderr_lines_that_are_not_utf8_are_kept_lossily() {
+        let tail = StderrTail::default();
+        tail.read_from(&b"one\n\xff two\r\nthree"[..]).await;
+        assert_eq!(tail.text(), "one\n\u{fffd} two\nthree");
+        for i in 0..30 {
+            tail.push(i.to_string());
+        }
+        assert_eq!(tail.text().lines().count(), 20);
+        assert!(tail.text().starts_with("10\n"));
     }
 }
