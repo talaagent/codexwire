@@ -107,7 +107,7 @@ pub struct AddPatchChangeKind {}
 pub enum AgentMessageDelivery {
     #[serde(rename = "async")]
     Async,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -149,7 +149,7 @@ pub enum ApprovalsReviewer {
     AutoReview,
     #[serde(rename = "guardian_subagent")]
     GuardianSubagent,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -164,7 +164,7 @@ pub enum AskForApproval {
     Never,
     #[serde(rename = "granular")]
     Granular(AskForApprovalGranular),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -242,7 +242,7 @@ pub enum CodexErrorInfo {
     /// Returned when `turn/start` or `turn/steer` is submitted while the current active turn cannot accept same-turn steering, for example `/review` or manual `/compact`.
     #[serde(rename = "activeTurnNotSteerable")]
     ActiveTurnNotSteerable(CodexErrorInfoActiveTurnNotSteerable),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -303,7 +303,7 @@ pub enum CollabAgentTool {
     InterruptAgent,
     #[serde(rename = "listAgents")]
     ListAgents,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -318,7 +318,7 @@ pub enum CollabAgentToolCallStatus {
     Failed,
     #[serde(rename = "interrupted")]
     Interrupted,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -381,7 +381,7 @@ pub enum CommandExecutionApprovalDecision {
     /// User denied the command. The turn will also be immediately interrupted.
     #[serde(rename = "cancel")]
     Cancel,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -403,7 +403,7 @@ pub enum CommandExecutionApprovalKind {
     Command,
     #[serde(rename = "writeStdin")]
     WriteStdin,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -476,7 +476,7 @@ pub enum CommandExecutionSource {
     UnifiedExecStartup,
     #[serde(rename = "unifiedExecInteraction")]
     UnifiedExecInteraction,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -491,7 +491,7 @@ pub enum CommandExecutionStatus {
     Failed,
     #[serde(rename = "declined")]
     Declined,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -562,7 +562,7 @@ pub enum DynamicToolCallStatus {
     Completed,
     #[serde(rename = "failed")]
     Failed,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -623,7 +623,7 @@ pub enum FileChangeApprovalDecision {
     /// User denied the file changes. The turn will also be immediately interrupted.
     #[serde(rename = "cancel")]
     Cancel,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -698,7 +698,7 @@ pub enum ImageDetail {
     High,
     #[serde(rename = "original")]
     Original,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -708,7 +708,7 @@ pub enum ImageDetail {
 pub enum ImageGenerationFailure {
     #[serde(rename = "usageLimitExceeded")]
     UsageLimitExceeded(UsageLimitExceededImageGenerationFailure),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -845,7 +845,7 @@ pub enum McpAppDisplayMode {
     Inline,
     #[serde(rename = "fullscreen")]
     Fullscreen,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -867,7 +867,7 @@ pub enum McpServerElicitationAction {
     Decline,
     #[serde(rename = "cancel")]
     Cancel,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -921,7 +921,7 @@ pub enum McpToolCallStatus {
     Completed,
     #[serde(rename = "failed")]
     Failed,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -981,7 +981,7 @@ pub enum MessagePhase {
     /// The assistant's terminal answer text for the current turn.
     #[serde(rename = "final_answer")]
     FinalAnswer,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1013,7 +1013,7 @@ pub enum ModeKind {
     Plan,
     #[serde(rename = "default")]
     Default,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1034,7 +1034,7 @@ pub enum NetworkApprovalProtocol {
     Socks5Tcp,
     #[serde(rename = "socks5Udp")]
     Socks5Udp,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1047,7 +1047,7 @@ pub enum NonSteerableTurnKind {
     Review,
     #[serde(rename = "compact")]
     Compact,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1062,7 +1062,7 @@ pub enum PatchApplyStatus {
     Failed,
     #[serde(rename = "declined")]
     Declined,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1076,7 +1076,7 @@ pub enum PatchChangeKind {
     Delete(DeletePatchChangeKind),
     #[serde(rename = "update")]
     Update(UpdatePatchChangeKind),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1090,7 +1090,7 @@ pub enum Personality {
     Friendly,
     #[serde(rename = "pragmatic")]
     Pragmatic,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1139,7 +1139,7 @@ pub enum PlanType {
     EduPro,
     #[serde(rename = "unknown")]
     Unknown,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     UnknownValue(Value),
 }
@@ -1156,7 +1156,7 @@ pub enum RateLimitReachedType {
     WorkspaceOwnerUsageLimitReached,
     #[serde(rename = "workspace_member_usage_limit_reached")]
     WorkspaceMemberUsageLimitReached,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1221,7 +1221,7 @@ pub enum ReasoningSummary {
     /// Option to disable reasoning summaries.
     #[serde(rename = "none")]
     None,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1243,7 +1243,7 @@ pub enum SandboxMode {
     WorkspaceWrite,
     #[serde(rename = "danger-full-access")]
     DangerFullAccess,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1266,7 +1266,7 @@ pub enum SessionSource {
     Custom(String),
     #[serde(rename = "subAgent")]
     SubAgent(SubAgentSource),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     UnknownValue(Value),
 }
@@ -1314,7 +1314,7 @@ pub enum SubAgentActivityKind {
     Interrupted,
     #[serde(rename = "completed")]
     Completed,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1341,7 +1341,7 @@ pub enum SubAgentSource {
     ThreadSpawn(SubAgentSourceThreadSpawn),
     #[serde(rename = "other")]
     Other(String),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1466,7 +1466,7 @@ pub enum ThreadHistoryMode {
     Legacy,
     #[serde(rename = "paginated")]
     Paginated,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1516,7 +1516,7 @@ pub enum ThreadItem {
     ExitedReviewMode(ExitedReviewModeThreadItem),
     #[serde(rename = "contextCompaction")]
     ContextCompaction(ContextCompactionThreadItem),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1720,7 +1720,7 @@ pub enum ThreadStartSource {
     Startup,
     #[serde(rename = "clear")]
     Clear,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1838,7 +1838,7 @@ pub enum TurnItemsView {
     /// `items` contains every ThreadItem available from persisted app-server history for this turn.
     #[serde(rename = "full")]
     Full,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1925,7 +1925,7 @@ pub enum TurnStatus {
     Failed,
     #[serde(rename = "inProgress")]
     InProgress,
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }
@@ -1970,7 +1970,7 @@ pub enum UserInput {
     Skill(SkillUserInput),
     #[serde(rename = "mention")]
     Mention(MentionUserInput),
-    /// A value this Codex version doesn't know.
+    /// A value this Codex version doesn't know, or a known one whose body didn't decode.
     #[serde(untagged)]
     Unknown(Value),
 }

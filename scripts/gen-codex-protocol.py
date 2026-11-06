@@ -12,6 +12,10 @@ string enums and `oneOf`s become enums with an `Unknown(Value)` catch-all
 (a newer Codex adding a variant must not break decoding), `oneOf`s tagged
 by a `type` field become internally tagged enums; anything else (mixed
 `anyOf`, untyped) stays `serde_json::Value`.
+
+The catch-all is serde's untagged fallback, so a *known* tag whose body
+doesn't decode (a field missing or of another type) lands in `Unknown`
+too, silently: callers that care about schema drift log `Unknown` values.
 """
 
 import json
@@ -132,7 +136,10 @@ def catch_all(out):
         ln.strip() == "Unknown," or ln.strip().startswith("Unknown(") for ln in lines
     )
     v = "UnknownValue" if taken else "Unknown"
-    out.append("    /// A value this Codex version doesn't know.")
+    out.append(
+        "    /// A value this Codex version doesn't know, or a known one whose"
+        " body didn't decode."
+    )
     out.append(f"    #[serde(untagged)]\n    {v}(Value),\n}}\n")
     return "\n".join(out) + "\n"
 
