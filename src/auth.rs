@@ -18,6 +18,49 @@ pub fn auth_to_copy_back(orig: &[u8], now_real: &[u8], after: &[u8]) -> bool {
         && serde_json::from_slice::<serde_json::Value>(after).is_ok_and(|v| v.is_object())
 }
 
+/// Whether a run on login `auth` (an `auth.json`) may refresh its tokens
+/// at `now` (unix seconds; pure): the access token ends within 10
+/// minutes, the last refresh is a week old (Codex refreshes ahead of
+/// time), or either can't be read.
+///
+/// Such a run should go alone ([`refresh_lock`]): `ChatGPT`'s refresh
+/// tokens are single-use, and two runs refreshing the same one get it
+/// revoked (`refresh_token_reused`) until the user signs in again.
+pub fn may_refresh(auth: &[u8], now: i64) -> bool {
+    use base64::Engine as _;
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(auth) else {
+        return true;
+    };
+    let exp = v["tokens"]["access_token"]
+        .as_str()
+        .and_then(|t| t.split('.').nth(1))
+        .and_then(|p| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(p.trim_end_matches('='))
+                .ok()
+        })
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|c| c["exp"].as_i64());
+    let last = v["last_refresh"]
+        .as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|d| d.timestamp());
+    match (exp, last) {
+        (Some(exp), Some(last)) => exp <= now + 600 || last <= now - 7 * 86_400,
+        _ => true,
+    }
+}
+
+/// This process's lock for runs that [`may_refresh`] the login: hold it
+/// (it is async, so across the run) from reading `auth.json` until the
+/// refreshed one is copied back, and the next run reads the new tokens.
+/// One lock for every login: a process rarely has more than one, and
+/// runs that may refresh are rare. It doesn't reach other processes.
+pub fn refresh_lock() -> &'static tokio::sync::Mutex<()> {
+    static L: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    L.get_or_init(tokio::sync::Mutex::default)
+}
+
 /// What was copied into a session's home, to copy back on close.
 ///
 /// It holds the copied `auth.json` (its tokens), so its `Debug` shows only
@@ -30,6 +73,10 @@ pub struct Copied {
 }
 
 impl Copied {
+    pub(crate) fn new(real: PathBuf, ours: PathBuf, orig: Vec<u8>) -> Self {
+        Self { real, ours, orig }
+    }
+
     /// The length of the `auth.json` that was copied in.
     pub fn orig_len(&self) -> usize {
         self.orig.len()
@@ -89,7 +136,7 @@ pub async fn mkdir_private(p: &Path) -> std::io::Result<()> {
 }
 
 /// Write `data` to `p` (0600) through a temp file and a rename.
-async fn write_private_atomic(p: &Path, data: &[u8]) -> std::io::Result<()> {
+pub(crate) async fn write_private_atomic(p: &Path, data: &[u8]) -> std::io::Result<()> {
     let name = p
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -136,6 +183,27 @@ mod tests {
         assert!(!auth_to_copy_back(orig, orig, b""), "emptied");
         assert!(!auth_to_copy_back(orig, orig, b"not json"), "garbage");
         assert!(!auth_to_copy_back(orig, orig, b"[1]"), "not an object");
+    }
+
+    #[test]
+    fn may_refresh_only_near_expiry() {
+        use base64::Engine as _;
+        let now = 1_800_000_000;
+        let auth = |exp: i64, last: &str| {
+            let claims = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(format!(r#"{{"exp":{exp}}}"#));
+            format!(r#"{{"last_refresh":"{last}","tokens":{{"access_token":"h.{claims}.s"}}}}"#)
+        };
+        let recent = "2027-01-14T00:00:00Z"; // a day before `now`
+        assert!(!may_refresh(auth(now + 86_400, recent).as_bytes(), now));
+        assert!(may_refresh(auth(now + 60, recent).as_bytes(), now));
+        assert!(may_refresh(auth(now - 60, recent).as_bytes(), now));
+        assert!(may_refresh(
+            auth(now + 86_400, "2027-01-01T00:00:00Z").as_bytes(),
+            now
+        ));
+        assert!(may_refresh(b"{}", now));
+        assert!(may_refresh(b"nope", now));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! its `VERSION` are in `schema/`, [`CODEX_VERSION`] is the version), [`rpc`]
 //! frames its messages, [`client`] runs the child and matches responses to
 //! requests, and [`auth`] gives a session its own copy of `auth.json`.
+//! [`exec`] runs one-shot `codex exec` jobs in a private `CODEX_HOME`.
 //!
 //! The README follows (its example is compiled as a doctest).
 //!
@@ -26,6 +27,7 @@ extern crate alloc;
 
 pub mod auth;
 pub mod client;
+pub mod exec;
 #[allow(
     missing_docs,
     clippy::pedantic,
