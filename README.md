@@ -22,7 +22,14 @@ Unix only (the child's process handling, `auth.json`'s file modes).
   `tokio::time::timeout` (a dropped call forgets its request).
   `redact` scrubs secrets out of its stderr.
 - `codexwire::auth`: a session's private copy of `auth.json`, copied back
-  only if Codex refreshed it and the real one didn't change meanwhile.
+  only if Codex refreshed it and the real one didn't change meanwhile;
+  `may_refresh` and `refresh_lock` keep two runs from spending the same
+  single-use refresh token.
+- `codexwire::exec`: one-shot `codex exec --json` runs, each in a fresh
+  private `CODEX_HOME` holding only a copy of the login (copied back when
+  refreshed, the rest removed); `failure` says why a run failed (a dead
+  login, a refused one, the turn's error); `image_prompt` and
+  `Run::generated_images` for image generation.
 
 From `examples/initialize.rs`:
 

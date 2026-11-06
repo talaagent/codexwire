@@ -18,16 +18,21 @@ exclude = ["schema", "scripts"]
 [workspace]
 
 [dependencies]
+# auth::may_refresh: the access token's claims and `last_refresh`.
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The client: the child process and its stdio (process, io-util), the
-# reader task and response channels (rt, sync), auth.json (fs).
+# reader task and response channels (rt, sync), auth.json (fs), exec's
+# timeout (time).
 tokio = { version = "1", default-features = false, features = [
     "fs",
     "io-util",
     "process",
     "rt",
     "sync",
+    "time",
 ] }
 
 [dev-dependencies]

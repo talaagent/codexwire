@@ -1,0 +1,31 @@
+#!/bin/sh
+# A fake `codex exec` for tests/exec.rs: checks it runs in a private
+# CODEX_HOME holding only a copy of the login, then acts per the prompt.
+[ "$1" = exec ] || exit 10
+case "$CODEX_HOME" in "$REAL_CODEX_HOME"*) exit 9 ;; esac
+[ -f "$CODEX_HOME/history.jsonl" ] && exit 8
+[ "$HOME" = "$TMPDIR" ] || exit 6
+last=""
+img=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --output-last-message) last=$2; shift ;;
+  --image=*) img=${1#--image=} ;;
+  esac
+  shift
+done
+prompt=$(cat)
+case "$prompt" in
+*image*)
+  [ -n "$img" ] && [ -f "$img" ] || exit 5
+  mkdir -p "$CODEX_HOME/generated_images/t1"
+  cp "$img" "$CODEX_HOME/generated_images/t1/exec-1.png"
+  printf '{"tokens":"new"}' >"$CODEX_HOME/auth.json"
+  printf 'done' >"$last"
+  ;;
+*fail*)
+  echo '{"type":"turn.failed","error":{"message":"You'"'"'ve hit your usage limit."}}'
+  exit 3
+  ;;
+*hang*) sleep 30 ;;
+esac
