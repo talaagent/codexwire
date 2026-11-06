@@ -66,7 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Includes tests/corpus.rs (recorded app-server output) and
       # tests/spawn.rs (the fake codex, tests/fake_codex: python3, which the
-      # runner has).
+      # runner has) and tests/exec.rs (tests/fake_codex_exec: sh).
       - run: cargo test --all-targets --locked
       # The README's example, compiled (lib.rs includes the README).
       - run: cargo test --doc --locked
