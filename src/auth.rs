@@ -2,6 +2,8 @@
 //! own `CODEX_HOME`: copied in before the app-server starts, copied back when
 //! Codex refreshed its tokens and nobody else changed the real one since.
 //! (The same rule a tool that refreshes the login and copies it back follows.)
+//!
+//! Unix only: the files are made 0600 and the directories 0700.
 
 use std::path::{Path, PathBuf};
 
@@ -17,11 +19,34 @@ pub fn auth_to_copy_back(orig: &[u8], now_real: &[u8], after: &[u8]) -> bool {
 }
 
 /// What was copied into a session's home, to copy back on close.
-#[derive(Debug, Clone)]
+///
+/// It holds the copied `auth.json` (its tokens), so its `Debug` shows only
+/// the length of it.
+#[derive(Clone)]
 pub struct Copied {
     pub real: PathBuf,
     pub ours: PathBuf,
-    pub orig: Vec<u8>,
+    orig: Vec<u8>,
+}
+
+impl Copied {
+    /// The length of the `auth.json` that was copied in.
+    pub fn orig_len(&self) -> usize {
+        self.orig.len()
+    }
+}
+
+impl core::fmt::Debug for Copied {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Copied")
+            .field("real", &self.real)
+            .field("ours", &self.ours)
+            .field(
+                "orig",
+                &format_args!("[redacted; {} bytes]", self.orig.len()),
+            )
+            .finish()
+    }
 }
 
 /// Make `home` (0700) and copy `<from>/auth.json` into it (0600).
@@ -36,6 +61,11 @@ pub async fn copy_in(from: &Path, home: &Path) -> std::io::Result<Copied> {
 
 /// Copy the session's `auth.json` back when [`auth_to_copy_back`] says so.
 /// Returns whether it did.
+///
+/// Not atomic against another writer of the real file: one that writes it
+/// between this reading it and the rename loses its write. The window is
+/// short (a read and a rename); callers that share the real file across
+/// processes serialise their copy-backs.
 pub async fn copy_back(c: &Copied) -> std::io::Result<bool> {
     let after = match tokio::fs::read(&c.ours).await {
         Ok(b) => b,
@@ -50,7 +80,8 @@ pub async fn copy_back(c: &Copied) -> std::io::Result<bool> {
     Ok(true)
 }
 
-/// `mkdir -p -m 0700`.
+/// `mkdir -p -m 0700`: only the directories it creates get 0700; an
+/// existing `p` keeps its mode.
 pub async fn mkdir_private(p: &Path) -> std::io::Result<()> {
     let mut b = tokio::fs::DirBuilder::new();
     b.recursive(true).mode(0o700);
@@ -105,6 +136,21 @@ mod tests {
         assert!(!auth_to_copy_back(orig, orig, b""), "emptied");
         assert!(!auth_to_copy_back(orig, orig, b"not json"), "garbage");
         assert!(!auth_to_copy_back(orig, orig, b"[1]"), "not an object");
+    }
+
+    #[test]
+    fn debug_redacts_the_tokens() {
+        let c = Copied {
+            real: PathBuf::from("/r/auth.json"),
+            ours: PathBuf::from("/s/auth.json"),
+            orig: br#"{"tokens":{"access_token":"eyJsecret","refresh_token":"rt-secret"}}"#
+                .to_vec(),
+        };
+        let d = format!("{c:?}");
+        assert!(!d.contains("secret") && !d.contains("eyJ"), "{d}");
+        let n = c.orig_len();
+        assert!(d.contains(&format!("[redacted; {n} bytes]")), "{d}");
+        assert!(d.contains("/r/auth.json"), "{d}");
     }
 
     #[tokio::test]
