@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/talaagent/codexwire/compare/codexwire-v0.1.0...codexwire-v0.1.1) - 2026-11-07
+
+### Other
+
+- use Jiff and refresh dependencies and Rust development tooling
+- link to published crates and record initial releases
+
 ## [0.1.0] - 2026-11-07
 
 ### Added
