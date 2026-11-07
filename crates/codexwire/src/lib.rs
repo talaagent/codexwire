@@ -8,9 +8,10 @@
 //! requests, and [`auth`] gives a session its own copy of `auth.json`.
 //! [`exec`] runs one-shot `codex exec` jobs in a private `CODEX_HOME`.
 //!
-//! The README follows (its example is compiled as a doctest).
+//! The README follows (its examples are compiled as doctests).
 //!
 #![doc = include_str!("../README.md")]
+#![deny(rustdoc::broken_intra_doc_links)]
 // Owned arguments where the callee keeps them, and Result-returning helpers
 // kept uniform; the error docs would only restate the messages.
 #![allow(
@@ -28,16 +29,8 @@ extern crate alloc;
 pub mod auth;
 pub mod client;
 pub mod exec;
-#[allow(
-    missing_docs,
-    clippy::pedantic,
-    clippy::large_enum_variant,
-    clippy::enum_variant_names,
-    clippy::doc_markdown,
-    non_camel_case_types,
-    reason = "generated"
-)]
-pub mod protocol;
+/// Generated app-server types, also available as the `codexwire-protocol` crate.
+pub use codexwire_protocol as protocol;
 pub mod rpc;
 
 pub use protocol::CODEX_VERSION;
@@ -54,8 +47,8 @@ mod tests {
 
     #[test]
     fn version_from_user_agent() {
-        let ua = "my-client/0.158.0 (NixOS 26.11.0; x86_64) dumb (my-client; 0.1.0)";
-        assert_eq!(user_agent_version(ua), Some("0.158.0"));
+        let ua = "my-client/0.167.0 (NixOS 26.11.0; x86_64) dumb (my-client; 0.1.0)";
+        assert_eq!(user_agent_version(ua), Some("0.167.0"));
         assert_eq!(user_agent_version("nothing"), None);
     }
 }

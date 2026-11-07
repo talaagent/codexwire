@@ -89,7 +89,7 @@ impl Drop for Waiting<'_> {
 
 /// The request side; cheap to share (`Arc`).
 pub struct Client {
-    writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
+    writer: Mutex<Option<Box<dyn AsyncWrite + Send + Unpin>>>,
     next_id: AtomicI64,
     pending: Pending,
 }
@@ -124,7 +124,7 @@ impl Client {
         let (tx, rx) = mpsc::unbounded_channel();
         tokio::spawn(read_server(reader, Arc::clone(&pending), tx));
         let c = Self {
-            writer: Mutex::new(Box::new(writer)),
+            writer: Mutex::new(Some(Box::new(writer))),
             next_id: AtomicI64::new(1),
             pending,
         };
@@ -132,7 +132,8 @@ impl Client {
     }
 
     async fn write(&self, line: &str) -> Result<(), ClientError> {
-        let mut w = self.writer.lock().await;
+        let mut writer = self.writer.lock().await;
+        let w = writer.as_mut().ok_or(ClientError::Closed)?;
         w.write_all(line.as_bytes())
             .await
             .map_err(|e| ClientError::Io(e.to_string()))?;
@@ -193,9 +194,15 @@ impl Client {
         self.write(&rpc::error_response(id, code, message)).await
     }
 
-    /// Close our side (the app-server exits on EOF).
+    /// Close our side (the app-server exits on EOF). Later writes fail
+    /// with [`ClientError::Closed`]. Calling this more than once is harmless.
     pub async fn shutdown(&self) {
-        let _ = self.writer.lock().await.shutdown().await;
+        // AsyncWrite::shutdown alone need not close a child pipe. Drop the
+        // owned writer as well so the process can observe EOF on stdin.
+        let writer = self.writer.lock().await.take();
+        if let Some(mut writer) = writer {
+            let _ = writer.shutdown().await;
+        }
     }
 }
 

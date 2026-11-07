@@ -1,53 +1,25 @@
-[package]
-name = "codexwire"
-description = "A Rust client for the OpenAI Codex app-server: its JSON-RPC protocol, typed"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/talaagent/codexwire"
 authors = ["Ian Macalinao <github@igm.pub>"]
 rust-version = "1.85"
-publish = false
-keywords = ["codex", "openai", "agent", "json-rpc", "sdk"]
-categories = ["api-bindings"]
-# The schema and its generator stay in the repo: src/protocol.rs is what
-# they make, committed.
-exclude = ["schema", "scripts"]
 
-# Its own workspace, not a member of an enclosing one.
-[workspace]
-
-[dependencies]
-# auth::may_refresh: the access token's claims and `last_refresh`.
+[workspace.dependencies]
+codexwire-protocol = { path = "crates/codexwire-protocol", version = "0.1.0" }
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The client: the child process and its stdio (process, io-util), the
-# reader task and response channels (rt, sync), auth.json (fs), exec's
-# timeout (time).
-tokio = { version = "1", default-features = false, features = [
-    "fs",
-    "io-util",
-    "process",
-    "rt",
-    "sync",
-    "time",
-] }
-
-[dev-dependencies]
+tokio = { version = "1", default-features = false }
 tempfile = "3"
-tokio = { version = "1", default-features = false, features = [
-    "fs",
-    "io-util",
-    "process",
-    "rt",
-    "sync",
-    "macros",
-    "time",
-] }
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 complexity = { level = "deny", priority = -1 }
 must_use_candidate = "allow"

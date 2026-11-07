@@ -1,0 +1,19 @@
+[workspace]
+release_always = false
+changelog_update = true
+semver_check = true
+pr_draft = false
+
+[[package]]
+name = "codexwire"
+version_group = "codexwire"
+changelog_path = "crates/codexwire/CHANGELOG.md"
+git_tag_name = "codexwire-v{{ version }}"
+git_release_name = "codexwire-v{{ version }}"
+
+[[package]]
+name = "codexwire-protocol"
+version_group = "codexwire"
+changelog_path = "crates/codexwire-protocol/CHANGELOG.md"
+git_tag_name = "codexwire-protocol-v{{ version }}"
+git_release_name = "codexwire-protocol-v{{ version }}"

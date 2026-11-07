@@ -47,10 +47,19 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "chrono",
+ "codexwire-protocol",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "codexwire-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

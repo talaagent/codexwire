@@ -7,11 +7,28 @@
 
 use core::time::Duration;
 
-use codexwire::client::{ENV_ALLOW, ServerMessage, spawn_app_server};
+use codexwire::client::{ClientError, ENV_ALLOW, ServerMessage, spawn_app_server};
 use codexwire::protocol::{CODEX_VERSION, ClientInfo, InitializeParams};
 use serde_json::{Value, json};
 
 const FAKE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fake_codex");
+
+#[tokio::test]
+async fn shutdown_closes_stdin_and_reaps_the_child() {
+    let cwd = tempfile::tempdir().unwrap();
+    let mut server = spawn_app_server(FAKE, &[], &[], cwd.path()).unwrap();
+    within(server.client.call("fake/info", &json!({})))
+        .await
+        .unwrap();
+
+    within(server.client.shutdown()).await;
+    within(server.client.shutdown()).await;
+    assert!(matches!(
+        within(server.client.notify("initialized", None)).await,
+        Err(ClientError::Closed)
+    ));
+    assert!(within(server.child.wait()).await.unwrap().success());
+}
 
 async fn within<F: Future>(f: F) -> F::Output {
     tokio::time::timeout(Duration::from_secs(10), f)

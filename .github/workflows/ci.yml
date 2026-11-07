@@ -1,9 +1,6 @@
 # CI: fmt, clippy, tests, MSRV, docs, cargo-deny and codegen drift.
 #
-# The private gate: every job has `if: ${{ !github.event.repository.private }}`.
-# While the repo is private (where Actions minutes cost money) each job is
-# skipped, and a skipped job uses no minutes. The day the repo is made public
-# the condition turns true and the jobs run, with no further commit.
+# Run while private too, so publication readiness is verified before visibility changes.
 
 name: CI
 
@@ -28,7 +25,6 @@ env:
 jobs:
   fmt:
     name: rustfmt
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -41,7 +37,6 @@ jobs:
 
   clippy:
     name: clippy
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,11 +46,10 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   test:
     name: test
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -64,16 +58,15 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@v2
-      # Includes tests/corpus.rs (recorded app-server output) and
-      # tests/spawn.rs (the fake codex, tests/fake_codex: python3, which the
-      # runner has) and tests/exec.rs (tests/fake_codex_exec: sh).
-      - run: cargo test --all-targets --locked
+      # Includes crates/codexwire/tests/corpus.rs (recorded app-server output) and
+      # crates/codexwire/tests/spawn.rs (the fake codex, tests/fake_codex: python3, which the
+      # runner has) and crates/codexwire/tests/exec.rs (tests/fake_codex_exec: sh).
+      - run: cargo test --workspace --all-targets --all-features --locked
       # The README's example, compiled (lib.rs includes the README).
-      - run: cargo test --doc --locked
+      - run: cargo test --workspace --doc --locked
 
   check-codegen:
     name: codegen drift
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -88,22 +81,13 @@ jobs:
 
   msrv:
     name: MSRV
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Read rust-version from Cargo.toml
         id: msrv
         run: |
-          if grep -Eq '^rust-version\.workspace|^rust-version *= *\{' Cargo.toml; then
-            echo "::error::Cargo.toml inherits rust-version from a workspace; this repo needs an explicit rust-version = \"x.y\""
-            exit 1
-          fi
-          msrv=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)
-          if [ -z "$msrv" ]; then
-            echo "::error::no rust-version = \"...\" in Cargo.toml"
-            exit 1
-          fi
+          msrv=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["rust-version"])')
           echo "MSRV: $msrv"
           echo "version=$msrv" >> "$GITHUB_OUTPUT"
       # Re-resolve Cargo.lock with a current cargo, whose rust-version-aware
@@ -119,11 +103,10 @@ jobs:
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo +${{ steps.msrv.outputs.version }} build --locked
+      - run: cargo +${{ steps.msrv.outputs.version }} build --workspace --locked
 
   doc:
     name: docs
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -D warnings
@@ -134,11 +117,10 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --no-deps
+      - run: cargo doc --workspace --no-deps --locked
 
   deny:
     name: cargo-deny
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -147,3 +129,26 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+
+  package:
+    name: package verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --workspace --dry-run --locked
+
+  protocol:
+    name: portable protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check -p codexwire-protocol --target wasm32-unknown-unknown --locked

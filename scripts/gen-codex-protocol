@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Regenerate the protocol types (src/protocol.rs) from the committed
+# Regenerate the protocol types (crates/codexwire-protocol/src/generated.rs) from the committed
 # app-server schema. Offline: the input is
 # schema/{codex_app_server_protocol.schemas.json,VERSION}.
 #
 # `--refresh [CODEX]` first re-dumps the schema from a codex binary (default
 # `codex` on PATH) and records its version: do that when bumping the pinned
-# Codex, then review the diff of src/protocol.rs.
+# Codex, then review the diff of crates/codexwire-protocol/src/generated.rs.
 #
 # `--check [CODEX]` only checks that a codex binary is the pinned version
 # (schema/VERSION) and exits non-zero if not.
@@ -40,5 +40,5 @@ case ${1:-} in
     ;;
 esac
 python3 -I scripts/gen-codex-protocol.py schema/codex_app_server_protocol.schemas.json \
-  schema/VERSION src/protocol.rs
-rustfmt --edition 2024 src/protocol.rs
+  schema/VERSION crates/codexwire-protocol/src/generated.rs
+rustfmt --edition 2024 crates/codexwire-protocol/src/generated.rs

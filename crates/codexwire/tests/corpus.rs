@@ -4,10 +4,9 @@
 //! them decoding fails here.
 
 use codexwire::protocol::{
-    CODEX_VERSION, ErrorNotification, InitializeResponse, ItemCompletedNotification,
-    ItemStartedNotification, Notification, ThreadItem, ThreadStartResponse,
-    ThreadStartedNotification, TurnCompletedNotification, TurnStartResponse,
-    TurnStartedNotification,
+    ErrorNotification, InitializeResponse, ItemCompletedNotification, ItemStartedNotification,
+    Notification, ThreadItem, ThreadStartResponse, ThreadStartedNotification,
+    TurnCompletedNotification, TurnStartResponse, TurnStartedNotification,
 };
 use codexwire::rpc::{Incoming, parse_line};
 use serde::de::DeserializeOwned;
@@ -47,7 +46,7 @@ fn the_recorded_turn_decodes() {
                     let r: InitializeResponse = decode(&what, result);
                     assert_eq!(
                         codexwire::user_agent_version(&r.user_agent),
-                        Some(CODEX_VERSION)
+                        Some("0.158.0")
                     );
                     assert_eq!(r.platform_family, "unix");
                 }

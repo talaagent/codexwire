@@ -1,0 +1,32 @@
+[package]
+name = "codexwire"
+description = "A Rust client for the OpenAI Codex app-server: its JSON-RPC protocol, typed"
+documentation = "https://docs.rs/codexwire"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["codex", "openai", "agent", "json-rpc", "sdk"]
+categories = ["api-bindings"]
+
+[dependencies]
+codexwire-protocol.workspace = true
+base64.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros"] }
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]

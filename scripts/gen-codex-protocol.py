@@ -229,8 +229,41 @@ class Gen:
 
     def define(self, name, s):
         doc = doc_lines(s.get("description"))
-        if "oneOf" in s and "properties" not in s:
-            return doc + self.one_of(name, s["oneOf"])
+        if "oneOf" in s:
+            # Newer schemas put lifecycle timestamps beside ThreadItem's
+            # variants. Keep those common fields in each tagged body.
+            common = s.get("properties", {})
+            alts = []
+            for a in s["oneOf"]:
+                if common:
+                    required = set(s.get("required", [])) | set(a.get("required", []))
+                    a = dict(
+                        a,
+                        properties={**common, **a.get("properties", {})},
+                        required=sorted(required),
+                    )
+                alts.append(a)
+            return doc + self.one_of(name, alts)
+        if "anyOf" in s and "properties" not in s:
+            alts = s["anyOf"]
+            non_null = [a for a in alts if a.get("type") != "null"]
+            if len(non_null) > 1:
+                # CodexErrorInfo now uses anyOf for its string and
+                # single-key object variants. Other unions stay raw JSON.
+                known = []
+                for a in alts:
+                    string_enum = a.get("type") == "string" and "enum" in a
+                    tagged_object = (
+                        a.get("type") == "object"
+                        and len(a.get("required", [])) == 1
+                        and len(a.get("properties", {})) == 1
+                    )
+                    if string_enum or tagged_object:
+                        known.append(a)
+                if known:
+                    return doc + self.one_of(name, known)
+                self.defaultable[name] = True
+                return doc + f"pub type {name} = Value;\n"
         if s.get("type") == "string" and "enum" in s:
             self.defaultable[name] = False
             return doc + self.enum(name, [(v, None) for v in s["enum"]])

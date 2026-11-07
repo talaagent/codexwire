@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
-# Codegen drift: regenerates the committed generated files (codexwire's
-# protocol types, from the committed Codex app-server schema) and fails if
-# any differs from what is committed. A failure means a generated file was
-# hand-edited, reformatted or made by another generator version, or the
-# schema changed without regenerating: run scripts/gen-codex-protocol and
-# commit the result.
+# Compare offline generation with the committed wire types without changing the tree.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-generated=(
-  src/protocol.rs
-)
-scripts/gen-codex-protocol
-if ! git diff --quiet -- "${generated[@]}"; then
-  git --no-pager diff --stat -- "${generated[@]}" >&2
-  echo "check-codegen: generated files differ from what the Codex schema makes (the regenerated ones are now in the tree: see git diff, commit them)" >&2
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+python3 -I scripts/gen-codex-protocol.py schema/codex_app_server_protocol.schemas.json \
+  schema/VERSION "$tmp/generated.rs"
+rustfmt --edition 2024 "$tmp/generated.rs"
+generated=crates/codexwire-protocol/src/generated.rs
+if ! cmp -s "$generated" "$tmp/generated.rs"; then
+  diff -u --label "$generated" --label regenerated "$generated" "$tmp/generated.rs" >&2 || true
+  echo "check-codegen: generated files differ; run scripts/gen-codex-protocol and review the diff" >&2
   exit 1
 fi
 echo "check-codegen: ok"

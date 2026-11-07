@@ -1,0 +1,23 @@
+[package]
+name = "codexwire-protocol"
+description = "Generated serde types for the OpenAI Codex app-server JSON-RPC protocol"
+documentation = "https://docs.rs/codexwire-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["codex", "openai", "agent", "json-rpc", "sdk"]
+categories = ["api-bindings"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
