@@ -24,11 +24,10 @@ using the client crate's existing import paths.
 
 ## Install
 
-Rust 1.85 or newer is required. Initial crates.io publication is pending; use
-Git until the package pages above show a release:
+Rust 1.85 or newer is required:
 
 ```sh
-cargo add codexwire --git https://github.com/talaagent/codexwire
+cargo add codexwire
 cargo add tokio --features macros,rt,time
 ```
 

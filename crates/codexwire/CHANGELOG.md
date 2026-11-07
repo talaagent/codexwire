@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-07
+
 ### Added
 
 - Unix Tokio app-server client, isolated exec runs, JSON-RPC framing, and auth helpers.
