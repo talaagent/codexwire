@@ -127,6 +127,67 @@ pub async fn copy_back(c: &Copied) -> std::io::Result<bool> {
     Ok(true)
 }
 
+/// The result of saving credentials without stopping an app-server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Checkpoint {
+    /// The shared file already contains the session's current credentials.
+    Unchanged,
+    /// Refreshed credentials were saved and the comparison baseline advanced.
+    Updated,
+    /// Another writer changed the shared credentials, or the session changed
+    /// account identity. Nothing was written.
+    /// Retire this app-server and start with the shared credentials again.
+    Conflict,
+}
+
+/// Save a long-lived app-server's credentials between turns, advancing the
+/// baseline after each successful refresh. Unlike a single close-time
+/// [`copy_back`], this supports multiple successive refreshes in one process.
+/// A matching shared/session file also advances the baseline, since another
+/// writer may already have saved this refresh.
+///
+/// Call under the account's refresh/write lock, including across processes
+/// when applicable. The filesystem read and rename are not a compare-and-swap
+/// transaction. A conflict must invalidate the warm app-server; do not copy
+/// the shared credentials over its home while it is still running.
+///
+/// # Errors
+/// Reading/writing failed or the session's credentials are not a JSON object.
+/// Errors never include credential contents.
+pub async fn checkpoint(c: &mut Copied) -> std::io::Result<Checkpoint> {
+    let after = tokio::fs::read(&c.ours).await?;
+    let after_json = serde_json::from_slice::<serde_json::Value>(&after).ok();
+    if !after_json
+        .as_ref()
+        .is_some_and(serde_json::Value::is_object)
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "session credentials are not a JSON object",
+        ));
+    }
+    let original_json = serde_json::from_slice::<serde_json::Value>(&c.orig).ok();
+    let account = |v: Option<&serde_json::Value>| {
+        v.and_then(|v| v.pointer("/tokens/account_id"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    if account(original_json.as_ref()) != account(after_json.as_ref()) {
+        return Ok(Checkpoint::Conflict);
+    }
+    let shared = tokio::fs::read(&c.real).await?;
+    if shared == after {
+        c.orig = after;
+        return Ok(Checkpoint::Unchanged);
+    }
+    if shared != c.orig {
+        return Ok(Checkpoint::Conflict);
+    }
+    write_private_atomic(&c.real, &after).await?;
+    c.orig = after;
+    Ok(Checkpoint::Updated)
+}
+
 /// `mkdir -p -m 0700`: only the directories it creates get 0700; an
 /// existing `p` keeps its mode.
 pub async fn mkdir_private(p: &Path) -> std::io::Result<()> {
@@ -257,5 +318,104 @@ mod tests {
         tokio::fs::write(&c2.ours, b"{\"a\":3}").await.unwrap();
         assert!(!copy_back(&c2).await.unwrap());
         assert_eq!(tokio::fs::read(&c2.real).await.unwrap(), b"{\"other\":1}");
+    }
+
+    async fn copied_at(dir: &Path) -> Copied {
+        let real = dir.join("real");
+        tokio::fs::create_dir(&real).await.unwrap();
+        tokio::fs::write(real.join("auth.json"), br#"{"token":"initial"}"#)
+            .await
+            .unwrap();
+        copy_in(&real, &dir.join("session")).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn checkpoint_saves_successive_refreshes_and_close_keeps_them() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let mut c = copied_at(dir.path()).await;
+        for after in [br#"{"token":"fresh-1"}"#, br#"{"token":"fresh-2"}"#] {
+            tokio::fs::write(&c.ours, after).await.unwrap();
+            assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Updated);
+            assert_eq!(tokio::fs::read(&c.real).await.unwrap(), after);
+        }
+        assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Unchanged);
+        assert!(!copy_back(&c).await.unwrap());
+        assert_eq!(
+            tokio::fs::metadata(&c.real)
+                .await
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+
+    #[tokio::test]
+    async fn checkpoint_conflict_preserves_both_writers_and_old_baseline() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut c = copied_at(dir.path()).await;
+        let original = c.orig.clone();
+        let shared = br#"{"account":"another-account"}"#;
+        let ours = br#"{"token":"our-refresh"}"#;
+        tokio::fs::write(&c.real, shared).await.unwrap();
+        tokio::fs::write(&c.ours, ours).await.unwrap();
+        assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Conflict);
+        assert_eq!(tokio::fs::read(&c.real).await.unwrap(), shared);
+        assert_eq!(tokio::fs::read(&c.ours).await.unwrap(), ours);
+        assert_eq!(c.orig, original);
+        assert!(!copy_back(&c).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn checkpoint_adopts_an_already_saved_refresh_as_its_baseline() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut c = copied_at(dir.path()).await;
+        let first = br#"{"token":"already-saved"}"#;
+        tokio::fs::write(&c.real, first).await.unwrap();
+        tokio::fs::write(&c.ours, first).await.unwrap();
+        assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Unchanged);
+        tokio::fs::write(&c.ours, br#"{"token":"next-refresh"}"#)
+            .await
+            .unwrap();
+        assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Updated);
+        assert_eq!(
+            tokio::fs::read(&c.real).await.unwrap(),
+            br#"{"token":"next-refresh"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_checkpoint_never_replaces_shared_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut c = copied_at(dir.path()).await;
+        for bad in [b"secret-invalid".as_slice(), b"", b"[]"] {
+            tokio::fs::write(&c.ours, bad).await.unwrap();
+            let error = checkpoint(&mut c).await.unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+            assert!(!error.to_string().contains("secret-invalid"));
+            assert_eq!(tokio::fs::read(&c.real).await.unwrap(), c.orig);
+        }
+    }
+
+    #[tokio::test]
+    async fn session_account_change_never_replaces_the_selected_account() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut c = copied_at(dir.path()).await;
+        // Seed a known account, then let the child switch identities.
+        let original = br#"{"tokens":{"account_id":"selected","access_token":"one"}}"#;
+        tokio::fs::write(&c.real, original).await.unwrap();
+        c = copy_in(c.real.parent().unwrap(), c.ours.parent().unwrap())
+            .await
+            .unwrap();
+        for after in [
+            br#"{"tokens":{"account_id":"different","access_token":"two"}}"#.as_slice(),
+            br#"{"tokens":{"access_token":"identity-missing"}}"#,
+        ] {
+            tokio::fs::write(&c.ours, after).await.unwrap();
+            assert_eq!(checkpoint(&mut c).await.unwrap(), Checkpoint::Conflict);
+            assert_eq!(tokio::fs::read(&c.real).await.unwrap(), original);
+        }
     }
 }
