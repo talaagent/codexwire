@@ -73,12 +73,20 @@ share a workspace version and release group. Each has a changelog and a package
 prefixed tag (`codexwire-v<version>` and `codexwire-protocol-v<version>`).
 This keeps crate releases distinct from older repository tags.
 
-Configure repository Actions secrets:
+Release PRs use the built-in `GITHUB_TOKEN` by default, with job-level
+`contents: write` and `pull-requests: write` permissions. Enable **Allow GitHub
+Actions to create and approve pull requests** in the organization and repository
+Actions settings, then set repository variable `RELEASE_PR=true`. The setup
+check prevents a failing updater from disturbing an existing release PR.
 
-- `RELEASE_PLZ_TOKEN`: a GitHub App token or PAT with repository contents,
-  pull-request, and workflow write permissions. A user/App token also lets
-  release PR updates trigger CI.
-- `CARGO_REGISTRY_TOKEN`: a crates.io publishing token for first publication.
+GitHub requires a maintainer to approve CI runs on PRs created or updated with
+`GITHUB_TOKEN`; token-generated pushes do not start ordinary push workflows.
+An optional `RELEASE_PLZ_TOKEN` (GitHub App token or PAT) can override the built-in
+token to run PR CI without that approval and support workflow-file updates.
+No personal GitHub token is required for the default setup.
+
+Configure the `CARGO_REGISTRY_TOKEN` Actions secret for first publication.
+It is already configured for this repository.
 
 The release workflow runs only while the repository is public; CI runs while
 private too so the first public version can be checked beforehand. Review and

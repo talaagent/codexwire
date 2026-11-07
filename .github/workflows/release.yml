@@ -23,12 +23,13 @@ jobs:
       group: release-plz-pr-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - name: Require release PR credentials
+      - name: Check release PR setup
         env:
-          HAS_RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN != '' }}
+          HAS_CUSTOM_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN != '' }}
+          BUILTIN_PR_ENABLED: ${{ vars.RELEASE_PR == 'true' }}
         run: |
-          if [ "$HAS_RELEASE_PLZ_TOKEN" != true ]; then
-            echo "::error::Configure RELEASE_PLZ_TOKEN with contents, pull-request, and workflow write permissions. See CONTRIBUTING.md."
+          if [ "$HAS_CUSTOM_TOKEN" != true ] && [ "$BUILTIN_PR_ENABLED" != true ]; then
+            echo "::error::Enable Actions-created pull requests in organization/repository settings, then set RELEASE_PR=true. RELEASE_PLZ_TOKEN is an optional alternative. See CONTRIBUTING.md."
             exit 1
           fi
       - uses: actions/checkout@v7
@@ -42,7 +43,7 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN || secrets.GITHUB_TOKEN }}
 
   release:
     if: ${{ !github.event.repository.private }}
