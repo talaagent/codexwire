@@ -152,3 +152,6 @@ Report vulnerabilities privately as described in
 [Apache-2.0](https://github.com/talaagent/codexwire/blob/main/LICENSE).
 Generated types and the schema derive from OpenAI Codex; attribution is in
 [NOTICE](https://github.com/talaagent/codexwire/blob/main/NOTICE).
+
+For development, `nix develop` supplies Rust and cargo-nextest.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for tests and protocol generation.

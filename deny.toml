@@ -42,7 +42,7 @@ multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = false
 highlight = "all"
-deny = []
+deny = [{ name = "chrono", reason = "Use jiff for date/time handling" }]
 skip = []
 skip-tree = []
 

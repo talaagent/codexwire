@@ -481,6 +481,7 @@ mod tests {
             ("HOME", "/home/alice"),
             ("ANTHROPIC_API_KEY", "sk-x"),
             ("DAEMON_TOKEN", "t"),
+            ("LC_CTYPE", "must-not-be-inherited"),
             ("CODEX_HOME", "/parent/codex"),
         ]
         .map(|(k, v)| (k.to_owned(), v.to_owned()));

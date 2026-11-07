@@ -24,13 +24,14 @@ fake children and synthetic or scrubbed fixtures, with no account or live API.
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --workspace --all-features --locked
+cargo nextest run --workspace --all-features --locked
+cargo test --workspace --all-features --doc --locked
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
 scripts/check-codegen
 cargo publish --workspace --dry-run --locked
 ```
 
-`cargo test` includes README and API doctests. `no_run` examples compile without
+`cargo test --doc` checks README and API doctests separately from nextest. `no_run` examples compile without
 starting a CLI. Run live examples explicitly using your own account. Check the
 protocol crate alone with `cargo check -p codexwire-protocol --locked`.
 With cargo-deny installed, run `cargo deny check` too.
@@ -108,3 +109,9 @@ for its first upload.
 
 Contributions use Apache-2.0. Preserve LICENSE and NOTICE in both packages and
 retain upstream schema attribution when regenerating types.
+
+Use `jiff` for date/time handling; do not add a direct `chrono` dependency.
+The Nix dev shell supplies Rust, Cargo, Clippy, rustfmt, and cargo-nextest.
+
+Run `nix develop` for the pinned toolchain or `nix flake check -L` to run
+the workspace through nextest and doctests in the Nix sandbox.

@@ -12,12 +12,12 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 codexwire-protocol = { path = "crates/codexwire-protocol", version = "0.1.0" }
-base64 = "0.22"
-chrono = { version = "0.4", default-features = false, features = ["alloc"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", default-features = false }
-tempfile = "3"
+base64 = "0.23.1"
+jiff = { version = "0.2.39", default-features = false, features = ["std"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", default-features = false }
+tempfile = "3.27.0"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

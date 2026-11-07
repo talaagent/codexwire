@@ -61,7 +61,8 @@ jobs:
       # Includes crates/codexwire/tests/corpus.rs (recorded app-server output) and
       # crates/codexwire/tests/spawn.rs (the fake codex, tests/fake_codex: python3, which the
       # runner has) and crates/codexwire/tests/exec.rs (tests/fake_codex_exec: sh).
-      - run: cargo test --workspace --all-targets --all-features --locked
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --profile ci --workspace --all-targets --all-features --locked
       # The README's example, compiled (lib.rs includes the README).
       - run: cargo test --workspace --doc --locked
 
@@ -152,3 +153,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo check -p codexwire-protocol --target wasm32-unknown-unknown --locked
+
+  nix:
+    name: Nix workspace and dev shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check -L
+      - run: nix develop --command cargo nextest --version

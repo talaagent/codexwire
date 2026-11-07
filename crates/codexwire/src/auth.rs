@@ -43,8 +43,8 @@ pub fn may_refresh(auth: &[u8], now: i64) -> bool {
         .and_then(|c| c["exp"].as_i64());
     let last = v["last_refresh"]
         .as_str()
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-        .map(|d| d.timestamp());
+        .and_then(|s| s.parse::<jiff::Timestamp>().ok())
+        .map(jiff::Timestamp::as_second);
     match (exp, last) {
         (Some(exp), Some(last)) => exp <= now + 600 || last <= now - 7 * 86_400,
         _ => true,
@@ -200,6 +200,15 @@ mod tests {
         assert!(may_refresh(auth(now - 60, recent).as_bytes(), now));
         assert!(may_refresh(
             auth(now + 86_400, "2027-01-01T00:00:00Z").as_bytes(),
+            now
+        ));
+        // Equivalent UTC offsets and fractional seconds keep the same refresh decision.
+        assert!(!may_refresh(
+            auth(now + 86_400, "2027-01-14T08:00:00.123+08:00").as_bytes(),
+            now
+        ));
+        assert!(may_refresh(
+            auth(now + 86_400, "not-a-timestamp").as_bytes(),
             now
         ));
         assert!(may_refresh(b"{}", now));
