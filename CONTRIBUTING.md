@@ -115,3 +115,23 @@ The Nix dev shell supplies Rust, Cargo, Clippy, rustfmt, and cargo-nextest.
 
 Run `nix develop` for the pinned toolchain or `nix flake check -L` to run
 the workspace through nextest and doctests in the Nix sandbox.
+
+
+## Trusted publishing
+
+Each crate trusts GitHub owner `talaagent`, repository `codexwire`, workflow
+`release.yml`, environment `release`. The publishing job has `id-token: write`;
+release-plz performs the OIDC exchange itself. Do not set `CARGO_REGISTRY_TOKEN`
+in that job: a persistent token overrides OIDC.
+
+Normal pushes publish only merged release PR versions. For an explicitly
+requested initial rollout or recovery, dispatch the release workflow with
+`bootstrap=true`; it publishes the committed versions through release-plz.
+`release_packages` optionally selects a comma-separated subset, allowing existing
+dependencies to publish before a new workspace crate. Empty means the workspace.
+The generated configuration is temporary and does not weaken normal push gating.
+
+For a brand-new crate, use a short-lived token with `publish-new` for its first
+release, then register the same trusted publisher through the crates.io settings
+or its API using `trustpub` permission. Never commit the token. Future updates
+use OIDC.

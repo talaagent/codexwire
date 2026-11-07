@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Prepare release-plz config for an explicitly requested, optionally partial release."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tomllib
+
+config = tomllib.loads(Path('release-plz.toml').read_text())
+metadata = json.loads(subprocess.check_output([
+    'cargo', 'metadata', '--no-deps', '--format-version', '1', '--locked'
+], text=True))
+members = set(metadata['workspace_members'])
+names = {p['name'] for p in metadata['packages'] if p['id'] in members}
+selected = {name.strip() for name in os.environ.get('RELEASE_PACKAGES', '').split(',') if name.strip()}
+if unknown := selected - names:
+    sys.exit('Unknown workspace packages: ' + ', '.join(sorted(unknown)))
+config.setdefault('workspace', {})['release_always'] = True
+if selected:
+    config['workspace']['release'] = False
+    packages = {p['name']: p for p in config.get('package', [])}
+    for name in sorted(names):
+        packages.setdefault(name, {'name': name})['release'] = name in selected
+    config['package'] = list(packages.values())
+lines = ['# Generated for an explicit manual release. Normal pushes retain release PR gating.', '[workspace]']
+for key, value in config['workspace'].items():
+    lines.append(f'{key} = {json.dumps(value)}')
+for package in config.get('package', []):
+    lines += ['', '[[package]]']
+    for key, value in package.items():
+        lines.append(f'{key} = {json.dumps(value)}')
+path = Path(sys.argv[1])
+path.write_text('\n'.join(lines) + '\n')
+# Validate the generated configuration before release-plz reads it.
+tomllib.loads(path.read_text())
+print('Prepared release for: ' + ', '.join(sorted(selected or names)))
