@@ -455,6 +455,8 @@ def main():
 // schema/ (codex {ver}). Do not edit.
 
 use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use serde::{{Deserialize, Serialize, de::DeserializeOwned}};
 use serde_json::Value;

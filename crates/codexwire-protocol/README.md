@@ -6,7 +6,8 @@
 
 Generated serde types for **Codex 0.167.0**'s app-server JSON-RPC protocol.
 This crate depends on serde and `serde_json`, with no Tokio, I/O, or child process
-support. For a client, use [codexwire](https://docs.rs/codexwire).
+support. It is `#![no_std]` and needs only `alloc`. For a client, use
+[codexwire](https://docs.rs/codexwire).
 
 Initial crates.io publication is pending. Install from Git for now:
 
