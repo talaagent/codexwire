@@ -150,9 +150,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: cargo check -p codexwire-protocol --target wasm32-unknown-unknown --locked
+      # no_std + alloc: a target without std.
+      - run: cargo build -p codexwire-protocol --no-default-features --target thumbv7em-none-eabihf --locked
 
   nix:
     name: Nix workspace and dev shell
