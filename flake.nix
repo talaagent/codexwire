@@ -7,13 +7,23 @@
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-      perSystem = { pkgs, lib, self', ... }: {
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+      perSystem = { system, pkgs, lib, self', ... }:
+        let
+          # Toolchain pinned by rust-toolchain.toml, from rust-overlay.
+          rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          rustPlatform = pkgs.makeRustPlatform { cargo = rustToolchain; rustc = rustToolchain; };
+        in {
+        _module.args.pkgs = import inputs.nixpkgs { inherit system; overlays = [ (import inputs.rust-overlay) ]; };
+        packages.default = rustPlatform.buildRustPackage {
           pname = "codexwire";
           version = (lib.importTOML ./Cargo.toml).workspace.package.version;
           src = lib.cleanSource ./.;
@@ -38,8 +48,8 @@
         };
         checks.default = self'.packages.default;
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [ cargo rustc clippy rustfmt rust-analyzer cargo-nextest cargo-deny python3 ];
-          RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+          packages = [ rustToolchain ] ++ (with pkgs; [ cargo-nextest cargo-deny python3 ]);
+          RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
         };
         formatter = pkgs.nixfmt;
       };
