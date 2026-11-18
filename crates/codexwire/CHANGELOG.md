@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/talaagent/codexwire/compare/codexwire-v0.1.2...codexwire-v0.1.3) - 2026-11-18
+
+### Added
+
+- *(protocol)* no_std + alloc ([#6](https://github.com/talaagent/codexwire/pull/6))
+
 ## [0.1.2](https://github.com/talaagent/codexwire/compare/codexwire-v0.1.1...codexwire-v0.1.2) - 2026-11-07
 
 ### Added
