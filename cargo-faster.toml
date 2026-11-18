@@ -1,0 +1,34 @@
+#:schema https://raw.githubusercontent.com/talaagent/cargo-faster/main/docs/cargo-faster.schema.json
+# cargo faster config; reference: https://github.com/talaagent/cargo-faster/blob/main/docs/cargo-faster.md#the-configuration-file
+
+# Both workspace crates change often (last 6 months: codexwire 28 file edits,
+# codexwire-protocol 13, mostly codegen refreshes).
+hot = ["codexwire", "codexwire-protocol"]
+
+# Public library: Tala's application crates depend on it, never the reverse.
+[[layer]]
+crates = ["*"]
+must_not_depend_on = ["tala-*"]
+reason = "a standalone public library; tala-agent depends on it, never the reverse"
+
+# CONTRIBUTING.md: keep the protocol crate free of process and async runtime
+# dependencies (it builds for wasm32 and no_std); codexwire re-exports it.
+[[layer]]
+crates = ["codexwire-protocol"]
+must_not_depend_on = ["codexwire", "tokio*", "async-*", "futures*", "mio"]
+reason = "generated wire types with only serde dependencies; the client depends on them, never the reverse"
+
+# Measured 2026-11-18 with `cargo faster check --timings`, run twice, larger
+# value taken (budget = measured x 1.25, rounded up): cold check 21.7s,
+# edit codexwire 1.6s, edit codexwire-protocol 5.2s, critical path
+# codexwire-protocol -> codexwire (2 crates), 0 duplicate versions.
+# Machine: shared 32-core dev box (load ~2x the CPUs), cold, `nix develop`.
+[budgets]
+cold_check_secs = 28
+edit_rebuild_secs = { codexwire = 2, codexwire-protocol = 7 }
+critical_path_max_crates = 2
+no_new_critical_crates = ["codexwire-protocol", "codexwire"]
+max_duplicate_versions = 0
+
+[env]
+nextest_profile = "ci" # CI runs `cargo nextest run --profile ci`
