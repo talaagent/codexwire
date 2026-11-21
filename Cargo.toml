@@ -13,7 +13,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 codexwire-protocol = { path = "crates/codexwire-protocol", version = "0.1.2" }
 base64 = "0.23.1"
-jiff = { version = "0.2.39", default-features = false, features = ["std"] }
+jiff = { version = "1.0.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0.154", default-features = false, features = ["alloc"] }
 tokio = { version = "1.54.1", default-features = false }
